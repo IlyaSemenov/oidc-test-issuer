@@ -9,13 +9,12 @@ const redirectUri = `${origin}/callback`
 
 /** Runs the authorization code flow of openid-client against the issuer in the same process. */
 async function signIn(issuer = createTestOidcIssuer({ basePath: "/oidc" }), loginHint?: string) {
-  const fetchIssuer: client.CustomFetch = (url, options) => issuer.fetch(new Request(url, options))
   const config = await client.discovery(
     new URL(issuer.getIssuerUrl(origin)),
     "client-1",
     "secret-1",
     undefined,
-    { [client.customFetch]: fetchIssuer },
+    { [client.customFetch]: issuer.fetch },
   )
 
   const codeVerifier = client.randomPKCECodeVerifier()
@@ -31,11 +30,9 @@ async function signIn(issuer = createTestOidcIssuer({ basePath: "/oidc" }), logi
     ...(loginHint === undefined ? {} : { login_hint: loginHint }),
   })
 
-  const authorization = await issuer.fetch(new Request(authorizationUrl.href))
-  expect(authorization.status).toBe(302)
-  const callbackUrl = new URL(authorization.headers.get("location")!)
+  const callbackUrl = await issuer.authorize(authorizationUrl)
 
-  const tokens = await client.authorizationCodeGrant(config, callbackUrl, {
+  const tokens = await client.authorizationCodeGrant(config, new URL(callbackUrl), {
     pkceCodeVerifier: codeVerifier,
     expectedState: state,
     expectedNonce: nonce,

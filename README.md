@@ -70,8 +70,8 @@ app.all("/_test/oidc/*", c => issuer.fetch(c.req.raw))
 
 ### Test in-process
 
-To run the whole sign-in flow in a unit test, route the HTTP requests of your OpenID Connect client to the issuer.
-With openid-client, pass a custom fetch:
+To run the whole sign-in flow in a unit test, pass `issuer.fetch` as the `fetch` of your OpenID Connect client: it takes a URL with the options of the global `fetch`.
+With openid-client:
 
 ```ts
 import * as client from "openid-client"
@@ -81,13 +81,19 @@ const config = await client.discovery(
   "client-id",
   "secret",
   undefined,
-  {
-    [client.customFetch]: (url, options) => issuer.fetch(new Request(url, options)),
-  },
+  { [client.customFetch]: issuer.fetch },
 )
 ```
 
-Follow the authorization URL with `issuer.fetch` too: it answers with a redirect to your callback URL.
+Instead of a browser, open the authorization URL with `issuer.authorize`, which returns the callback URL with the code:
+
+```ts
+const callbackUrl = await issuer.authorize(authorizationUrl)
+const tokens = await client.authorizationCodeGrant(config, new URL(callbackUrl), {
+  pkceCodeVerifier,
+  expectedState: state,
+})
+```
 
 ## Users
 

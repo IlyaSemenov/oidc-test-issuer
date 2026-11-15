@@ -22,6 +22,29 @@ test("answers 404 outside the base path", async () => {
   expect(response.status).toBe(404)
 })
 
+test("ignores the context that a server passes along with the request", async () => {
+  const response = await issuer.fetch(new Request(`${issuerUrl}/jwks`), { method: "POST" })
+
+  expect(response.status).toBe(200)
+})
+
+test("handles a request of another fetch implementation", async () => {
+  // Simulate a request from another fetch implementation by keeping its members outside the global Request prototype chain.
+  const foreignRequestPrototype = Object.create(
+    Object.prototype,
+    Object.getOwnPropertyDescriptors(Request.prototype),
+  )
+  const request: Request = Object.setPrototypeOf(
+    new Request(`${issuerUrl}/token`, { method: "POST", body: "grant_type=authorization_code" }),
+    foreignRequestPrototype,
+  )
+  expect(request instanceof Request).toBe(false)
+
+  const response = await issuer.fetch(request, { method: "GET" })
+
+  expect(await response.json()).toMatchObject({ error: "invalid_request" })
+})
+
 test("answers 405 to an unsupported method", async () => {
   const response = await issuer.fetch(new Request(`${issuerUrl}/token`))
 
@@ -31,31 +54,27 @@ test("answers 405 to an unsupported method", async () => {
 
 describe("authorize", () => {
   test("accepts the original redirect_uri without URL normalization", async () => {
-    const authorization = await issuer.fetch(
-      new Request(
-        `${issuerUrl}/authorize?${new URLSearchParams({
-          client_id: "client-1",
-          redirect_uri: "https://app.example.com",
-          response_type: "code",
-          code_challenge: await createS256CodeChallenge("verifier-1"),
-          code_challenge_method: "S256",
-        })}`,
-      ),
+    const callbackUrl = await issuer.authorize(
+      `${issuerUrl}/authorize?${new URLSearchParams({
+        client_id: "client-1",
+        redirect_uri: "https://app.example.com",
+        response_type: "code",
+        code_challenge: await createS256CodeChallenge("verifier-1"),
+        code_challenge_method: "S256",
+      })}`,
     )
-    const code = new URL(authorization.headers.get("location")!).searchParams.get("code")!
+    const code = new URL(callbackUrl).searchParams.get("code")!
 
-    const response = await issuer.fetch(
-      new Request(`${issuerUrl}/token`, {
-        method: "POST",
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          code,
-          code_verifier: "verifier-1",
-          client_id: "client-1",
-          redirect_uri: "https://app.example.com",
-        }),
+    const response = await issuer.fetch(`${issuerUrl}/token`, {
+      method: "POST",
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        code_verifier: "verifier-1",
+        client_id: "client-1",
+        redirect_uri: "https://app.example.com",
       }),
-    )
+    })
 
     expect(response.status).toBe(200)
   })
@@ -66,6 +85,12 @@ describe("authorize", () => {
     )
 
     expect(response.status).toBe(400)
+  })
+
+  test("authorize rejects when the issuer does not redirect back", async () => {
+    await expect(
+      issuer.authorize(`${issuerUrl}/authorize?client_id=client-1&redirect_uri=/callback`),
+    ).rejects.toThrow("400")
   })
 
   test("redirects back with an error without PKCE", async () => {
