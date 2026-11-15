@@ -1,6 +1,6 @@
 {
   "name": "oidc-test-issuer",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Stateless OpenID Connect issuer for tests, served by a web-standard fetch handler",
   "homepage": "https://github.com/IlyaSemenov/oidc-test-issuer#readme",
   "bugs": "https://github.com/IlyaSemenov/oidc-test-issuer/issues",
