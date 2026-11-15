@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig",
+  "compilerOptions": {
+    "paths": {
+      "oidc-test-issuer": ["../src"]
+    }
+  },
+  "include": ["**/*.ts"]
+}
